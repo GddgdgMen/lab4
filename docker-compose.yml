@@ -1,0 +1,80 @@
+services:
+  mongo_db:
+    image: mongo:latest
+    container_name: mongo_db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: [ "CMD","mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  nosql_app:
+    build: ./lab4_nosql
+    volumes:
+      - ./lab4_nosql:/app
+    container_name: nosql
+    environment:
+      - DJANGO_SECRET_KEY=${NOSQL_DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=${NOSQL_DJANGO_DEBUG}
+      - DB_NAME=${NOSQL_DB_NAME}
+      - DB_USER=${NOSQL_DB_USER}
+      - DB_PASSWORD=${NOSQL_DB_PASSWORD}
+      - DB_HOST=${NOSQL_DB_HOST}
+      - DB_PORT=${NOSQL_DB_PORT}
+    ports:
+      - "8001:8000"
+    depends_on:
+      mongo_db:
+         condition: service_healthy
+    command: python manage.py runserver 0.0.0.0:8000
+
+  sql_db:
+    image: postgres
+    container_name: sql_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST_AUTH_METHOD: "trust"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  sql_app:
+    build:
+      context: lab4_sql
+    container_name: sql_app
+    command: bash -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./lab4_sql:/usr/src/lab4_sql
+    ports:
+      - "8000:8000"
+    depends_on:
+      sql_db:
+        condition: service_healthy
+    environment:
+      - DJANGO_SECRET_KEY=${SQL_DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=${SQL_DJANGO_DEBUG}
+      - DB_NAME=${SQL_DB_NAME}
+      - DB_USER=${SQL_DB_USER}
+      - DB_PASSWORD=${SQL_DB_PASSWORD}
+      - DB_HOST=${SQL_DB_HOST}
+      - DB_PORT=${SQL_DB_PORT}
+
+volumes:
+  postgres_data:
+  mongo_data:
